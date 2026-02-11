@@ -1,0 +1,25 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: ${{ values.appName }}
+
+generatorOptions:
+  disableNameSuffixHash: true
+
+labels:
+  - pairs:
+      alert_channel: ${{ values.alertChannel }}
+      team: ${{ values.team }}
+    includeTemplates: true
+
+resources:
+  - ../../base
+
+configMapGenerator:
+  - name: ${{ values.appName }}-env
+    envs:
+      - ./${{ values.appName }}.env
+
+images:
+  - name: europe-docker.pkg.dev/sanity-artifacts/containers/${{ values.appName }}
+    newTag: latest

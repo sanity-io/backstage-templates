@@ -1,0 +1,19 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+${% if values.includeComponents and values.includeComponents.length %}
+components:
+${% for component in values.includeComponents %}  - ../../components/${{ component }}
+${% endfor %}
+
+${% endif %}
+resources:
+  - ./serviceaccount.yaml
+  - ./deployment.yaml
+  - ./service.yaml
+
+labels:
+  - pairs:
+      alert_channel: ${{ values.alertChannel }}
+      team: ${{ values.team }}
+    includeTemplates: true

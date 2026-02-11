@@ -1,0 +1,710 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: update-catalog-entry
+  title: Update existing catalog-info.yaml file of a previously registered component
+  description: 'Update an existing component by providing the component name and new details.'
+spec:
+  owner: group:sanity-io/sre
+  type: service
+
+  # These are the steps which are rendered in the frontend with the form input.
+  parameters:
+    - title: Select Component
+      required:
+        - entity
+      properties:
+        entity:
+          title: Component to Update
+          type: string
+          description: Select the component from the dropdown below
+          ui:field: EntityPicker
+          ui:options:
+            catalogFilter:
+              kind: Component
+            defaultKind: Component
+        entityPreview:
+          title: ''
+          type: string
+          default: ' '
+          ui:field: ReactiveEntityMonitor
+    - title: Update Metadata Fields (optional)
+      description: Current values are shown below each field. Clear or modify to update, leave unchanged to keep current values.
+      properties:
+        componentName:
+          title: Component Name
+          description: Change the component name (use with caution)
+          type: string
+          ui:field: SmartEntityFieldWithStorage
+          ui:options:
+            fieldPath: metadata.name
+        componentTitle:
+          title: Component Title
+          description: Human-readable title for the component
+          type: string
+          ui:field: SmartEntityFieldWithStorage
+          ui:options:
+            fieldPath: metadata.title
+        componentDescription:
+          title: Component Description
+          description: Brief description of what this component does
+          type: string
+          ui:field: SmartEntityFieldWithStorage
+          ui:options:
+            fieldPath: metadata.description
+    - title: Update Spec Fields (optional)
+      properties:
+        specType:
+          title: Component Type
+          type: string
+          description: The type of component (service, website, library, etc.)
+          enum:
+            - service
+            - website
+            - library
+            - documentation
+            - tool
+            - other
+          ui:field: SmartEntityFieldWithStorage
+          ui:options:
+            fieldPath: spec.type
+        specLifecycle:
+          title: Lifecycle
+          type: string
+          description: The lifecycle stage of this component
+          enum:
+            - experimental
+            - production
+            - deprecated
+          ui:field: SmartEntityFieldWithStorage
+          ui:options:
+            fieldPath: spec.lifecycle
+        specOwner:
+          title: Component Owner
+          type: string
+          description: Team or person responsible for this component
+          ui:field: SmartEntityFieldWithStorage
+          ui:options:
+            fieldPath: spec.owner
+            useEntityPicker: true
+            catalogFilter:
+              kind: Group
+        specSystem:
+          title: System
+          type: string
+          description: The system this component belongs to
+          ui:field: SmartEntityFieldWithStorage
+          ui:options:
+            fieldPath: spec.system
+            useEntityPicker: true
+            catalogFilter:
+              kind: System
+            showFullReference: false
+    - title: Update Annotations (optional)
+      properties:
+        terraformWorkspaces:
+          title: Terraform Workspaces
+          type: string
+          description: Comma-separated list of Terraform workspaces (e.g., gcp-sanity-staging-svc,gcp-sanity-production-svc). Will also set organization to 'sanity-io'.
+          ui:field: SmartEntityFieldWithStorage
+          ui:options:
+            fieldPath: metadata.annotations["terraform/workspaces"]
+        techDocsRef:
+          title: TechDocs Reference
+          type: string
+          description: Path to folder containing mkdocs.yml file (e.g., 'dir:.' if mkdocs.yml is in root, 'dir:./docs' if mkdocs.yml is in docs folder)
+          ui:field: SmartEntityFieldWithStorage
+          ui:options:
+            fieldPath: metadata.annotations["backstage.io/techdocs-ref"]
+        argocdProjectName:
+          title: ArgoCD Project Name
+          type: string
+          description: The ArgoCD project name for this component
+          ui:field: SmartEntityFieldWithStorage
+          ui:options:
+            fieldPath: metadata.annotations["argocd/project-name"]
+        kubernetesLabelSelector:
+          title: Kubernetes Label Selector
+          type: string
+          description: The Kubernetes label selector for this component (e.g., app=myapp)
+          ui:field: SmartEntityFieldWithStorage
+          ui:options:
+            fieldPath: metadata.annotations["backstage.io/kubernetes-label-selector"]
+        circleCIProjectSlug:
+          title: CircleCI Project Slug
+          type: string
+          description: The CircleCI project slug (e.g., github/org/repo)
+          ui:field: SmartEntityFieldWithStorage
+          ui:options:
+            fieldPath: metadata.annotations["circleci.com/project-slug"]
+        githubProjectSlug:
+          title: GitHub Project Slug
+          type: string
+          description: The GitHub project slug (e.g., org/repo)
+          ui:field: SmartEntityFieldWithStorage
+          ui:options:
+            fieldPath: metadata.annotations["github.com/project-slug"]
+        grafanaDashboardSelector:
+          title: Grafana Dashboard Selector
+          type: string
+          description: The Grafana dashboard selector for this component
+          ui:field: SmartEntityFieldWithStorage
+          ui:options:
+            fieldPath: metadata.annotations["grafana/dashboard-selector"]
+        sentryProjectSlug:
+          title: Sentry Project Slug
+          type: string
+          description: The Sentry project slug
+          ui:field: SmartEntityFieldWithStorage
+          ui:options:
+            fieldPath: metadata.annotations["sentry.io/project-slug"]
+        socketRepoSlug:
+          title: Socket.dev Repo Slug
+          type: string
+          description: The Socket.dev repository slug (e.g., org/repo)
+          ui:field: SmartEntityFieldWithStorage
+          ui:options:
+            fieldPath: metadata.annotations["socket.dev/repo-slug"]
+        customAnnotations:
+          title: Custom Annotations (Advanced)
+          type: string
+          description: 'Additional annotations in JSON format (e.g., {"key": "value"})'
+          ui:widget: textarea
+    - title: 🏷️ Update Tags and Links
+      description: Update tags for categorization and links to external resources. These fields support the component's discoverability and navigation.
+      properties:
+        componentTags:
+          title: Component Tags
+          description: Comma-separated list of tags (e.g., typescript, backend, api)
+          type: string
+          ui:field: SmartEntityFieldWithStorage
+          ui:options:
+            fieldPath: metadata.tags
+          ui:help: Current tags will be shown if already set. Modify or clear to update.
+        link1Url:
+          title: Link 1 - URL
+          type: string
+          description: URL for the first link (e.g., https://docs.example.com)
+          ui:field: SmartLinkField
+          ui:options:
+            linkIndex: 0
+            fieldType: url
+        link1Title:
+          title: Link 1 - Title
+          type: string
+          description: Display title for the first link (e.g., Documentation)
+          ui:field: SmartLinkField
+          ui:options:
+            linkIndex: 0
+            fieldType: title
+        link1Icon:
+          title: Link 1 - Icon (optional)
+          type: string
+          description: Icon for the first link
+          enum:
+            - docs
+            - github
+            - dashboard
+            - web
+            - chat
+            - calendar
+            - email
+            - help
+            - user
+          ui:field: SmartLinkField
+          ui:options:
+            linkIndex: 0
+            fieldType: icon
+        link2Url:
+          title: Link 2 - URL
+          type: string
+          description: URL for the second link
+          ui:field: SmartLinkField
+          ui:options:
+            linkIndex: 1
+            fieldType: url
+        link2Title:
+          title: Link 2 - Title
+          type: string
+          description: Display title for the second link
+          ui:field: SmartLinkField
+          ui:options:
+            linkIndex: 1
+            fieldType: title
+        link2Icon:
+          title: Link 2 - Icon (optional)
+          type: string
+          description: Icon for the second link
+          enum:
+            - docs
+            - github
+            - dashboard
+            - web
+            - chat
+            - calendar
+            - email
+            - help
+            - user
+          ui:field: SmartLinkField
+          ui:options:
+            linkIndex: 1
+            fieldType: icon
+        link3Url:
+          title: Link 3 - URL
+          type: string
+          description: URL for the third link
+          ui:field: SmartLinkField
+          ui:options:
+            linkIndex: 2
+            fieldType: url
+        link3Title:
+          title: Link 3 - Title
+          type: string
+          description: Display title for the third link
+          ui:field: SmartLinkField
+          ui:options:
+            linkIndex: 2
+            fieldType: title
+        link3Icon:
+          title: Link 3 - Icon (optional)
+          type: string
+          description: Icon for the third link
+          enum:
+            - docs
+            - github
+            - dashboard
+            - web
+            - chat
+            - calendar
+            - email
+            - help
+            - user
+          ui:field: SmartLinkField
+          ui:options:
+            linkIndex: 2
+            fieldType: icon
+        additionalLinks:
+          title: Additional Links (YAML)
+          type: string
+          description: |
+            Add more links beyond the first 3, or edit overflow links from the current entity.
+            Example format:
+            - url: "https://staging.example.com"
+              title: "Staging Environment"
+              icon: "dashboard"
+            - url: "https://prod.example.com"
+              title: "Production"
+          ui:field: SmartOverflowLinksField
+          ui:widget: textarea
+
+  # These are the steps that are executed in series in the scaffolder backend.
+  steps:
+    - id: fetch-entity
+      name: Fetch Entity from Catalog
+      action: catalog:fetch
+      input:
+        entityRef: ${{ parameters.entity }}
+    - id: debug-annotations
+      action: debug:log
+      name: Debug entity annotations
+      input:
+        message: |
+          Entity annotations:
+          ${{ steps['fetch-entity'].output.entity.metadata.annotations | dump }}
+    - id: get-repo-url
+      name: Extract repository URL
+      action: roadiehq:utils:jsonata
+      input:
+        data: ${{ steps['fetch-entity'].output.entity }}
+        expression: |
+          $.metadata.annotations.(
+            $location := $."backstage.io/managed-by-location";
+            $sourceLocation := $."backstage.io/source-location";
+            $url := $location ? $location : $sourceLocation;
+            $url
+          )
+    - id: debug-url
+      name: Debug extracted URL
+      action: debug:log
+      input:
+        message: |
+          Extracted URL: ${{ steps['get-repo-url'].output.result }}
+    - id: process-url
+      name: Extract GitHub details from URL
+      action: roadiehq:utils:jsonata
+      input:
+        data: ${{ steps['get-repo-url'].output.result }}
+        expression: |
+          $exists($) and $ != "" ? (
+            $url := $contains($, "url:") ? $substring($, 4) : $;
+            /* Extract owner and repo from GitHub URL */
+            $isGithub := $contains($url, "github.com");
+            $pathPart := $isGithub ? $substringAfter($url, "github.com/") : "";
+            $owner := $pathPart ? $substringBefore($pathPart, "/") : "";
+            $repoWithPath := $pathPart ? $substringAfter($pathPart, $owner & "/") : "";
+            $repo := $contains($repoWithPath, "/") ? $substringBefore($repoWithPath, "/") : $repoWithPath;
+            /* Extract branch/ref if present */
+            $branch := $contains($url, "/tree/") ? (
+              $afterTree := $substringAfter($url, "/tree/");
+              $contains($afterTree, "/") ? $substringBefore($afterTree, "/") : $afterTree
+            ) : "main";
+            {
+              "owner": $owner,
+              "repo": $repo,
+              "branch": $branch,
+              "isGithub": $isGithub,
+              "originalUrl": $url
+            }
+          ) : {"isGithub": false}
+    - id: debug-processed-url
+      name: Debug processed URL
+      action: debug:log
+      input:
+        message: |
+          Processed GitHub details: ${{ steps['process-url'].output.result | dump }}
+    - id: fetch-catalog-manifest
+      name: Fetch Catalog manifest file
+      action: fetch:plain:file
+      input:
+        url: https://github.com/${{ steps['process-url'].output.result.owner }}/${{ steps['process-url'].output.result.repo }}/blob/${{ steps['process-url'].output.result.branch }}/catalog-info.yaml
+        targetPath: ./fetched/catalog-info.yaml
+    - id: move-manifest-to-workbench
+      name: Move manifest file to a standalone location
+      action: fs:rename
+      input:
+        files:
+          - from: './fetched/catalog-info.yaml'
+            to: './manifest-folder/catalog-info.yaml'
+    - id: parse-catalog-manifest
+      name: Parse retrieved catalog manifest file
+      action: roadiehq:utils:fs:parse
+      input:
+        path: './manifest-folder/catalog-info.yaml'
+    - id: log-result
+      name: Display current catalog manifest
+      action: debug:log
+      input:
+        message: 'Catalog Manifest content: ${{ steps["parse-catalog-manifest"].output.content }}'
+    - id: identify-repo-and-owner
+      name: Identify repository and owner
+      action: roadiehq:utils:jsonata
+      input:
+        data: "${{ steps['fetch-entity'].output.entity }}"
+        expression: '$.metadata.annotations.(
+          $managedBy := $."backstage.io/managed-by-location";
+          $sourceLocation := $."backstage.io/source-location";
+          $location := $managedBy ? $managedBy : $sourceLocation;
+          /* Handle various URL formats */
+          $url := $contains($location, "url:") ? $substringAfter($location, "url:") : $location;
+          /* Extract owner and repo from GitHub/GitLab/Bitbucket URLs */
+          $pathPart := $contains($url, "github.com") ? $substringAfter($url, "github.com/") :
+          $contains($url, "gitlab.com") ? $substringAfter($url, "gitlab.com/") :
+          $contains($url, "bitbucket.org") ? $substringAfter($url, "bitbucket.org/") :
+          "";
+          $owner := $pathPart ? $substringBefore($pathPart, "/") : "unknown";
+          $repoWithPath := $pathPart ? $substringAfter($pathPart, $owner & "/") : "";
+          $repo := $contains($repoWithPath, "/") ? $substringBefore($repoWithPath, "/") : $repoWithPath;
+          {
+          "slug": $pathPart,
+          "owner": $owner,
+          "repo": $repo ? $repo : "unknown",
+          "repoSlug": $owner & "/" & ($repo ? $repo : "unknown"),
+          "annotations": $merge([
+          {},
+          $length("${{ parameters.argocdProjectName }}") > 0 ? {"argocd/project-name": "${{ parameters.argocdProjectName }}"} : {"argocd/project-name": $repo},
+          $length("${{ parameters.kubernetesLabelSelector }}") > 0 ? {"backstage.io/kubernetes-label-selector": "${{ parameters.kubernetesLabelSelector }}"} : {"backstage.io/kubernetes-label-selector": "app=" & $repo},
+          $length("${{ parameters.circleCIProjectSlug }}") > 0 ? {"circleci.com/project-slug": "${{ parameters.circleCIProjectSlug }}"} : {"circleci.com/project-slug": "github/" & $owner & "/" & $repo},
+          $length("${{ parameters.githubProjectSlug }}") > 0 ? {"github.com/project-slug": "${{ parameters.githubProjectSlug }}"} : {"github.com/project-slug": $owner & "/" & $repo},
+          $length("${{ parameters.grafanaDashboardSelector }}") > 0 ? {"grafana/dashboard-selector": "${{ parameters.grafanaDashboardSelector }}"} : {"grafana/dashboard-selector": $repo},
+          $length("${{ parameters.sentryProjectSlug }}") > 0 ? {"sentry.io/project-slug": "${{ parameters.sentryProjectSlug }}"} : {"sentry.io/project-slug": $repo},
+          $length("${{ parameters.socketRepoSlug }}") > 0 ? {"socket.dev/repo-slug": "${{ parameters.socketRepoSlug }}"} : {"socket.dev/repo-slug": $owner & "/" & $repo},
+          $length("${{ parameters.terraformWorkspaces }}") > 0 ? {
+          "terraform/organization": $owner,
+          "terraform/workspaces": "${{ parameters.terraformWorkspaces }}"
+          } : {},
+          $length("${{ parameters.techDocsRef }}") > 0 ? {"backstage.io/techdocs-ref": "${{ parameters.techDocsRef }}"} : {}
+          ])
+          }
+          )'
+    - id: log-result
+      name: Display retrieved params
+      action: debug:log
+      input:
+        message: 'Creating a PR to repo ${{ steps["identify-repo-and-owner"].output.result.repo }} owned by ${{ steps["identify-repo-and-owner"].output.result.owner }}'
+    - id: update-spec-type
+      name: Update Spec Type
+      if: ${{ parameters.specType != null }}
+      action: roadiehq:utils:jsonata:yaml:transform
+      input:
+        path: './manifest-folder/catalog-info.yaml'
+        expression: '$ ~> | $.spec | { "type": "${{ parameters.specType }}" } |'
+    - id: write-spec-type-to-file
+      name: Overwrite the existing type with new contents
+      if: ${{ parameters.specType != null }}
+      action: roadiehq:utils:fs:write
+      input:
+        path: './manifest-folder/catalog-info.yaml'
+        content: ${{ steps["update-spec-type"].output.result }}
+    - id: update-spec-owner
+      name: Update Spec Owner
+      if: ${{ parameters.specOwner != null }}
+      action: roadiehq:utils:jsonata:yaml:transform
+      input:
+        path: './manifest-folder/catalog-info.yaml'
+        expression: '$ ~> | $.spec | { "owner": "${{ parameters.specOwner }}" } |'
+    - id: write-spec-owner-to-file
+      name: Overwrite the existing owner with new contents
+      if: ${{ parameters.specOwner != null }}
+      action: roadiehq:utils:fs:write
+      input:
+        path: './manifest-folder/catalog-info.yaml'
+        content: ${{ steps["update-spec-owner"].output.result }}
+    - id: update-spec-lifecycle
+      name: Update Spec Lifecycle
+      if: ${{ parameters.specLifecycle != null }}
+      action: roadiehq:utils:jsonata:yaml:transform
+      input:
+        path: './manifest-folder/catalog-info.yaml'
+        expression: '$ ~> | $.spec | { "lifecycle": "${{ parameters.specLifecycle }}" } |'
+    - id: write-spec-lifecycle-to-file
+      name: Overwrite the existing lifecycle with new contents
+      if: ${{ parameters.specLifecycle != null }}
+      action: roadiehq:utils:fs:write
+      input:
+        path: './manifest-folder/catalog-info.yaml'
+        content: ${{ steps["update-spec-lifecycle"].output.result }}
+    - id: update-spec-system
+      name: Update Spec System
+      if: ${{ parameters.specSystem != null }}
+      action: roadiehq:utils:jsonata:yaml:transform
+      input:
+        path: './manifest-folder/catalog-info.yaml'
+        expression: '$ ~> | $.spec | { "system": "${{ parameters.specSystem }}" } |'
+    - id: write-spec-system-to-file
+      name: Overwrite the existing system with new contents
+      if: ${{ parameters.specSystem != null }}
+      action: roadiehq:utils:fs:write
+      input:
+        path: './manifest-folder/catalog-info.yaml'
+        content: ${{ steps["update-spec-system"].output.result }}
+    - id: update-metadata-name
+      name: Update Component Name
+      if: ${{ parameters.componentName != null }}
+      action: roadiehq:utils:jsonata:yaml:transform
+      input:
+        path: './manifest-folder/catalog-info.yaml'
+        expression: '$ ~> | $.metadata | { "name": "${{ parameters.componentName }}" } |'
+    - id: write-metadata-name-to-file
+      name: Overwrite the existing name with new contents
+      if: ${{ parameters.componentName != null }}
+      action: roadiehq:utils:fs:write
+      input:
+        path: './manifest-folder/catalog-info.yaml'
+        content: ${{ steps["update-metadata-name"].output.result }}
+    - id: update-metadata-title
+      name: Update Component Title
+      if: ${{ parameters.componentTitle != null }}
+      action: roadiehq:utils:jsonata:yaml:transform
+      input:
+        path: './manifest-folder/catalog-info.yaml'
+        expression: '$ ~> | $.metadata | { "title": "${{ parameters.componentTitle }}" } |'
+    - id: write-metadata-title-to-file
+      name: Overwrite the existing title with new contents
+      if: ${{ parameters.componentTitle != null }}
+      action: roadiehq:utils:fs:write
+      input:
+        path: './manifest-folder/catalog-info.yaml'
+        content: ${{ steps["update-metadata-title"].output.result }}
+    - id: update-metadata-desc
+      name: Update Component Description
+      if: ${{ parameters.componentDescription != null }}
+      action: roadiehq:utils:jsonata:yaml:transform
+      input:
+        path: './manifest-folder/catalog-info.yaml'
+        expression: '$ ~> | $.metadata | { "description": "${{ parameters.componentDescription }}" } |'
+    - id: write-metadata-desc-to-file
+      name: Overwrite the existing description with new contents
+      if: ${{ parameters.componentDescription != null }}
+      action: roadiehq:utils:fs:write
+      input:
+        path: './manifest-folder/catalog-info.yaml'
+        content: ${{ steps["update-metadata-desc"].output.result }}
+    - id: build-tags-array
+      name: Build tags array from comma-separated string
+      if: ${{ parameters.componentTags and parameters.componentTags.trim().length > 0 }}
+      action: roadiehq:utils:jsonata
+      input:
+        data: '${{ parameters.componentTags }}'
+        expression: |
+          $split($, ",") ~> $map(function($v) { $trim($v) }) ~> $filter(function($v) { $v != "" })
+    - id: update-metadata-tags
+      name: Update Component Tags
+      if: ${{ parameters.componentTags and parameters.componentTags.trim().length > 0 }}
+      action: roadiehq:utils:jsonata:yaml:transform
+      input:
+        path: './manifest-folder/catalog-info.yaml'
+        expression: '$ ~> | $.metadata | { "tags": ${{ steps["build-tags-array"].output.result | dump }} } |'
+    - id: write-metadata-tags-to-file
+      name: Overwrite the existing tags with new contents
+      if: ${{ parameters.componentTags and parameters.componentTags.trim().length > 0 }}
+      action: roadiehq:utils:fs:write
+      input:
+        path: './manifest-folder/catalog-info.yaml'
+        content: ${{ steps["update-metadata-tags"].output.result }}
+    - id: write-additional-links
+      name: Write additional links YAML to file
+      if: ${{ parameters.additionalLinks }}
+      action: roadiehq:utils:fs:write
+      continueOnFailure: true
+      input:
+        path: './temp-links.yaml'
+        content: ${{ parameters.additionalLinks }}
+    - id: parse-additional-links
+      name: Parse additional links from YAML file
+      if: ${{ parameters.additionalLinks }}
+      action: roadiehq:utils:fs:parse
+      continueOnFailure: true
+      input:
+        path: './temp-links.yaml'
+    - id: build-all-links
+      name: Build complete links array
+      if: ${{ parameters.link1Url or parameters.link2Url or parameters.link3Url or parameters.additionalLinks }}
+      action: roadiehq:utils:jsonata
+      input:
+        data:
+          link1:
+            url: ${{ parameters.link1Url }}
+            title: ${{ parameters.link1Title }}
+            icon: ${{ parameters.link1Icon }}
+          link2:
+            url: ${{ parameters.link2Url }}
+            title: ${{ parameters.link2Title }}
+            icon: ${{ parameters.link2Icon }}
+          link3:
+            url: ${{ parameters.link3Url }}
+            title: ${{ parameters.link3Title }}
+            icon: ${{ parameters.link3Icon }}
+          additionalLinks: ${{ steps["parse-additional-links"].output.content if steps["parse-additional-links"].output.success else [] }}
+        expression: |
+          (
+            /* Combine first 3 links with additional links */
+            $firstThree := [
+              $.link1.url ? $.link1 : null,
+              $.link2.url ? $.link2 : null,
+              $.link3.url ? $.link3 : null
+            ][$ != null];
+            $additional := $.additionalLinks ? $.additionalLinks : [];
+            $append($firstThree, $additional)
+          )
+    - id: update-metadata-links
+      name: Update Component Links
+      if: ${{ parameters.link1Url or parameters.link2Url or parameters.link3Url or parameters.additionalLinks }}
+      action: roadiehq:utils:jsonata:yaml:transform
+      input:
+        path: './manifest-folder/catalog-info.yaml'
+        expression: '$ ~> | $.metadata | { "links": ${{ steps["build-all-links"].output.result | dump }} } |'
+    - id: write-metadata-links-to-file
+      name: Overwrite the existing links with new contents
+      if: ${{ parameters.link1Url or parameters.link2Url or parameters.link3Url or parameters.additionalLinks }}
+      action: roadiehq:utils:fs:write
+      input:
+        path: './manifest-folder/catalog-info.yaml'
+        content: ${{ steps["update-metadata-links"].output.result }}
+    - id: parse-custom-annotations
+      name: Parse custom annotations JSON
+      if: ${{ parameters.customAnnotations }}
+      action: roadiehq:utils:jsonata
+      continueOnFailure: true
+      input:
+        data: '${{ parameters.customAnnotations }}'
+        expression: |
+          /* Validate it's an object and not an array or string */
+          $ ~> $type() = "object" ? $ : {}
+    - id: merge-annotations
+      name: Merge all annotations
+      action: roadiehq:utils:jsonata
+      input:
+        data:
+          existing: ${{ steps["parse-catalog-manifest"].output.content.metadata.annotations }}
+          repo: ${{ steps["identify-repo-and-owner"].output.result.annotations }}
+          custom: ${{ steps["parse-custom-annotations"].output.result if steps["parse-custom-annotations"].output.success else {} }}
+        expression: |
+          $merge([$.existing, $.repo, $.custom])
+    - id: migrate-grafana-annotation
+      name: Migrate old Grafana annotation to new format
+      action: roadiehq:utils:jsonata
+      input:
+        data: ${{ steps["merge-annotations"].output.result }}
+        expression: |
+          (
+            /* If old grafana/tag-selector exists, migrate or remove it */
+            $hasOld := $exists($."grafana/tag-selector");
+            $hasNew := $exists($."grafana/dashboard-selector");
+            $oldValue := $."grafana/tag-selector";
+
+            /* Always remove old annotation if it exists */
+            $withoutOld := $hasOld ? (
+              $ ~> |$|{}, "grafana/tag-selector"|
+            ) : $;
+
+            /* If old exists and new doesn't, add the migrated value */
+            $hasOld and $not($hasNew) ? (
+              $withoutOld ~> |$|{"grafana/dashboard-selector": $oldValue}|
+            ) : $withoutOld
+          )
+    - id: update-annotations
+      name: Update annotations with standard integrations
+      action: roadiehq:utils:jsonata:yaml:transform
+      input:
+        path: './manifest-folder/catalog-info.yaml'
+        expression: '$ ~> | $.metadata | { "annotations": ${{ steps["migrate-grafana-annotation"].output.result | dump }} } |'
+    - id: write-annotations-to-file
+      name: Overwrite the existing annotations with updated contents
+      action: roadiehq:utils:fs:write
+      input:
+        path: './manifest-folder/catalog-info.yaml'
+        content: ${{ steps["update-annotations"].output.result }}
+    - id: parse-catalog-manifest
+      name: Parse modified catalog manifest file
+      action: roadiehq:utils:fs:parse
+      input:
+        path: './manifest-folder/catalog-info.yaml'
+    - id: log-result
+      name: Display modified catalog manifest
+      action: debug:log
+      input:
+        message: 'Catalog Manifest content: ${{ steps["parse-catalog-manifest"].output.content }}'
+    - id: generate-branch-name
+      name: Generate unique branch name
+      action: roadiehq:utils:jsonata
+      input:
+        data: {}
+        expression: |
+          "update-catalog-entry-" & $replace($replace($replace($string($now()), ":", ""), "T", "-"), "Z", "")
+    - id: create-pr
+      name: Create a pull request
+      action: publish:github:pull-request
+      input:
+        sourcePath: ./manifest-folder/
+        targetPath: ./
+        repoUrl: github.com?repo=${{ steps["identify-repo-and-owner"].output.result.repo }}&owner=${{ steps["identify-repo-and-owner"].output.result.owner }}
+        branchName: ${{ steps["generate-branch-name"].output.result }}
+        title: 'chore(backstage): update ${{ steps["identify-repo-and-owner"].output.result.repo }} catalog entry'
+        description: This PR updates the catalog-info.yaml file with new values provided in the form fields. Only fields with values provided are included in the change to the file. The catalog-info.yaml file is used by Backstage for catalog inclusion.
+    - id: register
+      name: Register updated component in catalog
+      action: catalog:register
+      continueOnFailure: true
+      input:
+        catalogInfoUrl: https://github.com/${{ steps["identify-repo-and-owner"].output.result.repoSlug }}/blob/${{ steps['create-pr'].output.targetBranchName or 'main' }}/catalog-info.yaml
+        optional: true
+
+  # These are the outputs from the backend steps, and can be displayed in the frontend after completion.
+  output:
+    links:
+      - title: View the pull request on GitHub
+        icon: github
+        url: ${{ steps['create-pr'].output.remoteUrl }}
+      - title: Open in catalog
+        icon: catalog
+        entityRef: ${{ steps['register'].output.entityRef }}

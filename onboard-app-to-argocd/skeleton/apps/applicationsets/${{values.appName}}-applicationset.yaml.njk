@@ -1,0 +1,48 @@
+${% if values.useApplicationSet %}apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: ${{ values.appName }}-applicationset
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/manifest-generate-paths: /${{ values.appName }}
+    argocd.argoproj.io/sync-options: Delete=false
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+
+  generators:
+    - list:
+        elements:
+${% for env in values.environments %}${% if env == 'staging' %}        - environment: staging
+          cluster: tools-staging-01
+${% endif %}${% if env == 'production' %}        - environment: production
+          cluster: production
+${% endif %}${% endfor %}
+
+  syncPolicy:
+    preserveResourcesOnDeletion: true
+    applicationsSync: create-update
+
+  template:
+    metadata:
+      name: "${{ values.appName }}-${{ "{{" }} .environment ${{ "}}" }}"
+      annotations:
+        argocd.argoproj.io/manifest-generate-paths: /${{ values.appName }}
+    spec:
+      destination:
+        namespace: ${{ values.appName }}
+        name: "${{ "{{" }} .cluster ${{ "}}" }}"
+      project: ${{ values.appName }}
+      source:
+        repoURL: git@github.com:sanity-io/argocd-apps
+        targetRevision: main
+        path: "${{ values.appName }}/environments/${{ "{{" }} .environment ${{ "}}" }}"
+        plugin:
+          name: kustomize-envsubst
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+${% endif %}

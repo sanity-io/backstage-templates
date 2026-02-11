@@ -1,0 +1,105 @@
+# ${{ values.appName }}
+
+${{ values.description }}
+
+## Overview
+
+This repository contains the ${{ values.appName }} application, maintained by the ${{ values.team }} team.
+
+## Technology Stack
+
+- **Language**: {% if values.language == 'typescript' %}TypeScript/Node.js{% elif values.language == 'go' %}Go{% endif %}
+- **Deployment**: Kubernetes via ArgoCD
+- **CI/CD**: CircleCI
+- **Container Registry**: Google Container Registry (europe-docker.pkg.dev)
+
+## Getting Started
+
+### Prerequisites
+
+{% if values.language == 'typescript' %}
+- Node.js 20.x or higher
+- npm or pnpm
+{% elif values.language == 'go' %}
+- Go 1.21 or higher
+{% endif %}
+- Docker (for local container builds)
+
+### Local Development
+
+{% if values.language == 'typescript' %}
+```bash
+# Install dependencies
+npm install
+
+# Run tests
+npm test
+
+# Run linter
+npm run lint
+
+# Start development server
+npm run dev
+```
+{% elif values.language == 'go' %}
+```bash
+# Download dependencies
+go mod download
+
+# Run tests
+go test ./...
+
+# Run linter (requires golangci-lint)
+golangci-lint run
+
+# Build binary
+go build -o ${{ values.appName }} .
+
+# Run application
+./${{ values.appName }}
+```
+{% endif %}
+
+### Building Docker Image
+
+```bash
+docker build -t ${{ values.appName }} .
+docker run -p 3000:3000 ${{ values.appName }}
+```
+
+## Deployment
+
+This application is deployed to Kubernetes using ArgoCD. The deployment configurations are managed in the [argocd-apps](https://github.com/sanity-io/argocd-apps) repository.
+
+### Environments
+
+- **Staging**: Automatically deployed from main branch
+- **Production**: Deployed via tags
+
+## CI/CD
+
+CircleCI is configured to:
+1. Run tests and linting on all branches
+2. Build and push Docker images to GCR
+3. Tag images appropriately for deployment
+
+## Monitoring
+
+- **Alerts**: Sent to #${{ values.alertChannel }} Slack channel
+- **Logs**: Available in Datadog
+- **Metrics**: Exposed on `/metrics` endpoint
+
+## Contributing
+
+1. Create a feature branch
+2. Make your changes
+3. Ensure tests pass
+4. Submit a pull request
+
+## Support
+
+For questions or issues, contact the ${{ values.team }} team or post in #${{ values.alertChannel }}.
+
+---
+
+🤖 Generated with [Backstage](https://backstage.io)

@@ -1,0 +1,25 @@
+${% if not values.useApplicationSet %}apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ${{ values.appName }}-production
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/manifest-generate-paths: /${{ values.appName }}
+spec:
+  destination:
+    namespace: ${{ values.appName }}
+    name: production
+  project: ${{ values.appName }}
+  source:
+    repoURL: git@github.com:sanity-io/argocd-apps
+    targetRevision: main
+    path: "${{ values.appName }}/environments/production"
+    plugin:
+      name: kustomize-envsubst
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+${% endif %}

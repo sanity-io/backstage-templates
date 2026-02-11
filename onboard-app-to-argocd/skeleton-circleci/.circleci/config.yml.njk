@@ -1,0 +1,239 @@
+version: 2.1
+
+orbs:
+  slack: circleci/slack@5.1.1
+
+{% if values.language == 'go' %}
+parameters:
+  go-tools-image:
+    type: string
+    default: europe-docker.pkg.dev/sanity-artifacts/containers/go-tools:latest
+
+aliases:
+  - &setup_slack_env
+    name: Prepare Slack environment
+    command: |
+      message=$(git log --format=%s -n 1 ${CIRCLE_SHA1})
+      author=$(git log --format=%an -n 1 ${CIRCLE_SHA1})
+      echo "export COMMIT_MESSAGE='$message'" >> $BASH_ENV
+      echo "export COMMIT_AUTHOR='$author'" >> $BASH_ENV
+{% elif values.language == 'typescript' %}
+aliases:
+  - &setup_slack_env
+    name: Prepare Slack environment
+    command: |
+      message=$(git log --format=%s -n 1 ${CIRCLE_SHA1})
+      author=$(git log --format=%an -n 1 ${CIRCLE_SHA1})
+      echo "export COMMIT_MESSAGE='$message'" >> $BASH_ENV
+      echo "export COMMIT_AUTHOR='$author'" >> $BASH_ENV
+{% endif %}
+
+workflows:
+  build-and-test:
+    jobs:
+{% if values.language == 'go' %}
+      - lint-and-test:
+          context: default
+          post-steps: &failure_post_steps
+            - slack/notify:
+                custom: |
+                  {
+                    "text": "",
+                    "blocks": [
+                      {
+                        "type": "section",
+                        "text": {
+                          "type": "mrkdwn",
+                          "text": "*failure* <$CIRCLE_BUILD_URL|$CIRCLE_PROJECT_REPONAME #$CIRCLE_BUILD_NUM> ($CIRCLE_BRANCH) by $COMMIT_AUTHOR: $COMMIT_MESSAGE"
+                        }
+                      }
+                    ]
+                  }
+                event: fail
+{% elif values.language == 'typescript' %}
+      - test-pre:
+          context: default
+          post-steps: &failure_post_steps
+            - slack/notify:
+                custom: |
+                  {
+                    "text": "",
+                    "blocks": [
+                      {
+                        "type": "section",
+                        "text": {
+                          "type": "mrkdwn",
+                          "text": "*failure* <$CIRCLE_BUILD_URL|$CIRCLE_PROJECT_REPONAME #$CIRCLE_BUILD_NUM> ($CIRCLE_BRANCH) by $COMMIT_AUTHOR: $COMMIT_MESSAGE"
+                        }
+                      }
+                    ]
+                  }
+                event: fail
+      - lint:
+          context: default
+          post-steps: *failure_post_steps
+          requires:
+            - test-pre
+      - test:
+          context: default
+          post-steps: *failure_post_steps
+          requires:
+            - test-pre
+{% endif %}
+      - build-and-push:
+          context: default
+          post-steps: *failure_post_steps
+          requires:
+{% if values.language == 'go' %}
+            - lint-and-test
+{% elif values.language == 'typescript' %}
+            - test
+            - lint
+{% endif %}
+      - trivy-container:
+          context: default
+          post-steps: *failure_post_steps
+          requires:
+            - build-and-push
+      - trivy-repo:
+          context: default
+          post-steps: *failure_post_steps
+          requires:
+            - build-and-push
+
+jobs:
+{% if values.language == 'go' %}
+  lint-and-test:
+    docker:
+      - image: << pipeline.parameters.go-tools-image >>
+        auth: { username: "_json_key", password: "$GCR_CREDENTIALS" }
+        environment:
+          PGHOST: localhost
+      - image: europe-docker.pkg.dev/sanity-artifacts/containers/postgresql:15
+        auth: { username: "_json_key", password: "$GCR_CREDENTIALS" }
+
+    working_directory: /build
+
+    steps:
+      - checkout
+      - run: *setup_slack_env
+      - run:
+          name: Prepare Test Database
+          command: |
+            apt-get update && apt-get install -y postgresql-client
+            export PGUSER=postgres
+            createuser -s {{ values.appName }}
+            createdb -O {{ values.appName }} {{ values.appName }}_test
+      - run:
+          name: Setup GitHub Token
+          command: |
+            apt-get update && apt-get install -y git
+            go env -w GOPRIVATE="github.com/sanity-io/*"
+            git config --global url."https://sanity-readonly:${GH_RO_TOKEN}@github.com/sanity-io".insteadOf "https://github.com/sanity-io"
+      - run:
+          name: Lint
+          command: |
+            run-linters
+      - run:
+          name: Test
+          command: |
+            make test-all || go test -v ./...
+      - store_test_results:
+          path: /tmp/testresults
+      - store_artifacts:
+          path: /tmp/testresults
+
+{% elif values.language == 'typescript' %}
+  test-pre:
+    docker:
+      - image: cimg/node:20.11
+    steps:
+      - checkout
+      - run: *setup_slack_env
+      - run:
+          name: 'Install dependencies'
+          environment:
+            NODE_ENV: test
+          command: |
+            echo -n "$NPMRC" | base64 -d > ~/.npmrc
+            npm ci
+      - persist_to_workspace:
+          root: /home/circleci/project
+          paths:
+            - node_modules
+
+  test:
+    docker:
+      - image: cimg/node:20.11
+    parallelism: 3
+    steps:
+      - checkout
+      - run: *setup_slack_env
+      - attach_workspace:
+          at: /home/circleci/project
+      - run:
+          name: 'Test'
+          command: |
+            npm test
+
+  lint:
+    docker:
+      - image: cimg/node:20.11
+    steps:
+      - checkout
+      - run: *setup_slack_env
+      - attach_workspace:
+          at: /home/circleci/project
+      - run:
+          name: 'Lint'
+          command: |
+            npm run lint
+{% endif %}
+
+  build-and-push:
+    docker:
+      - image: europe-docker.pkg.dev/sanity-artifacts/containers/ci:slim
+        auth: {username: '_json_key', password: '$GCR_CREDENTIALS'}
+    steps:
+      - checkout
+      - run: *setup_slack_env
+      - setup_remote_docker:
+          version: docker24
+          docker_layer_caching: true
+      - run:
+          name: 'Docker build and push'
+          command: |
+{% if values.language == 'typescript' %}
+            ci-circleci-build-push \
+              -t europe-docker.pkg.dev/sanity-artifacts/containers/${CIRCLE_PROJECT_REPONAME}:${CIRCLE_SHA1} \
+              --build-arg NPMRC=${NPMRC}
+{% elif values.language == 'go' %}
+            ci-circleci-build-push \
+              -t europe-docker.pkg.dev/sanity-artifacts/containers/${CIRCLE_PROJECT_REPONAME}:${CIRCLE_SHA1}
+{% endif %}
+
+  trivy-container:
+    docker:
+      - image: europe-docker.pkg.dev/sanity-artifacts/containers/trivy:latest
+        auth: { username: "_json_key", password: "$GCR_CREDENTIALS" }
+    steps:
+      - checkout
+      - run: *setup_slack_env
+      - setup_remote_docker:
+          version: docker24
+      - run:
+          name: "Trivy scan (Container)"
+          command: |
+            ci-trivy image europe-docker.pkg.dev/sanity-artifacts/containers/${CIRCLE_PROJECT_REPONAME}:${CIRCLE_SHA1} --config .trivy.conf
+
+  trivy-repo:
+    docker:
+      - image: europe-docker.pkg.dev/sanity-artifacts/containers/trivy:latest
+        auth: { username: "_json_key", password: "$GCR_CREDENTIALS" }
+    steps:
+      - checkout
+      - run: *setup_slack_env
+      - run:
+          name: "Trivy scan (Repo)"
+          command: |
+            ci-trivy fs . --config .trivy.conf

@@ -1,0 +1,63 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: ${{ values.name }}
+  title: ${{ values.name | replace(" ", "-") | lower }}
+  description: ${{ values.description }}
+  annotations:
+    {%- if values.annotations["argocd/project-name"] %}
+    argocd/project-name: ${{ values.annotations["argocd/project-name"] }}
+    {%- endif %}
+    {%- if values.annotations["backstage.io/kubernetes-label-selector"] %}
+    backstage.io/kubernetes-label-selector: ${{ values.annotations["backstage.io/kubernetes-label-selector"] }}
+    {%- endif %}
+    {%- if values.annotations["backstage.io/techdocs-ref"] %}
+    backstage.io/techdocs-ref: ${{ values.annotations["backstage.io/techdocs-ref"] }}
+    {%- endif %}
+    {%- if values.annotations["circleci.com/project-slug"] %}
+    circleci.com/project-slug: ${{ values.annotations["circleci.com/project-slug"] }}
+    {%- endif %}
+    {%- if values.annotations["github.com/project-slug"] %}
+    github.com/project-slug: ${{ values.annotations["github.com/project-slug"] }}
+    {%- endif %}
+    {%- if values.annotations["grafana/dashboard-selector"] %}
+    grafana/dashboard-selector: ${{ values.annotations["grafana/dashboard-selector"] }}
+    {%- endif %}
+    {%- if values.annotations["sentry.io/project-slug"] %}
+    sentry.io/project-slug: ${{ values.annotations["sentry.io/project-slug"] }}
+    {%- endif %}
+    {%- if values.annotations["socket.dev/repo-slug"] %}
+    socket.dev/repo-slug: ${{ values.annotations["socket.dev/repo-slug"] }}
+    {%- endif %}
+    {%- if values.annotations["terraform/organization"] %}
+    terraform/organization: ${{ values.annotations["terraform/organization"] }}
+    {%- endif %}
+    {%- if values.annotations["terraform/workspaces"] %}
+    terraform/workspaces: ${{ values.annotations["terraform/workspaces"] }}
+    {%- endif %}
+  {%- if values.entityTags and values.entityTags.length > 0 %}
+  tags:
+    {%- for tag in values.entityTags %}
+    - ${{ tag }}
+    {%- endfor %}
+  {%- endif %}
+  links:
+    - url: https://github.com/${{ values.repoSlug }}
+      title: Source Code
+      icon: github
+    {%- if values.entityLinks and values.entityLinks | length > 0 %}
+    {%- for link in values.entityLinks %}
+    - url: ${{ link.url }}
+      title: ${{ link.title }}
+      {%- if link.icon %}
+      icon: ${{ link.icon }}
+      {%- endif %}
+    {%- endfor %}
+    {%- endif %}
+spec:
+  type: ${{ values.type }}
+  owner: ${{ values.owner }}
+  lifecycle: ${{ values.lifecycle }}
+  {%- if values.system %}
+  system: ${{ values.system }}
+  {%- endif %}

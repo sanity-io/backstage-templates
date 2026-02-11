@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${{ values.appName }}
+  labels:
+    app: ${{ values.appName }}
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ${{ values.appName }}
+  template:
+    metadata:
+      labels:
+        app: ${{ values.appName }}
+    spec:
+      serviceAccountName: ${{ values.appName }}
+      containers:
+        - name: ${{ values.appName }}
+          image: europe-docker.pkg.dev/sanity-artifacts/containers/${{ values.appName }}:latest
+          ports:
+            - containerPort: 3000
+              name: http
+          env:
+            - name: NODE_ENV
+              value: "production"
+          envFrom:
+            - configMapRef:
+                name: ${{ values.appName }}-env
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5

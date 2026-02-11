@@ -1,0 +1,310 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: onboard-new-application
+  title: Onboard New Application
+  description: 'Complete application onboarding: optionally creates repository with initial structure, adds ArgoCD deployment configuration, and sets up CircleCI. Supports Node.js and Go applications with environment-specific deployments.'
+spec:
+  owner: group:sanity-io/sre
+  type: service
+
+  parameters:
+    - title: Application Information
+      required:
+        - appName
+        - team
+      properties:
+        appName:
+          title: Application Name
+          type: string
+          description: 'Name of the application (lowercase, alphanumeric with hyphens only)'
+          pattern: '^[a-z0-9-]+$'
+          ui:autofocus: true
+          ui:help: 'Must be lowercase and contain only letters, numbers, and hyphens'
+
+        description:
+          title: Application Description
+          type: string
+          description: 'Brief description of what this application does'
+
+        team:
+          title: Team
+          type: string
+          description: 'Team responsible for this application'
+          enum:
+            - cldx
+            - sre
+            - platform
+            - data
+            - content
+          ui:widget: select
+
+        alertChannel:
+          title: Alert Channel
+          type: string
+          description: 'Slack channel for alerts (without #)'
+          default: 'platform-alerts'
+
+    - title: Configuration
+      required:
+        - language
+        - useApplicationSet
+      properties:
+        language:
+          title: Application Language
+          type: string
+          description: 'Programming language/framework of the application'
+          default: 'typescript'
+          enum:
+            - 'typescript'
+            - 'go'
+          enumNames:
+            - 'TypeScript/Node.js'
+            - 'Go'
+
+        createRepo:
+          title: Create Application Repository
+          type: boolean
+          default: true
+          description: 'Create a new GitHub repository for this application if it does not exist'
+          ui:help: 'Creates a new repository at github.com/sanity-io/{appName} with basic structure, README, and .gitignore based on the selected language. If the repository already exists, this will be skipped.'
+
+        createCircleCI:
+          title: Create CircleCI Configuration
+          type: boolean
+          default: false
+          description: 'Add CircleCI configuration to the application'
+          ui:help: 'For new repositories: includes CircleCI config in the initial commit. For existing repositories: creates a PR to add CircleCI configuration.'
+
+        createDraftPR:
+          title: Create Draft Pull Requests
+          type: boolean
+          default: true
+          description: 'Create all pull requests as drafts for review before merging'
+          ui:help: 'Draft PRs allow you to review and make changes before the PR is ready for review'
+
+        environments:
+          title: Environments to Deploy
+          type: array
+          description: 'Select environments to create'
+          uniqueItems: true
+          default: ['staging', 'production']
+          items:
+            type: string
+            enum: ['staging', 'production']
+          ui:widget: checkboxes
+
+        useApplicationSet:
+          title: Use ApplicationSet (Recommended)
+          type: boolean
+          description: 'Use ApplicationSet for better scalability and management'
+          default: true
+          ui:widget: radio
+          ui:options:
+            trueLabel: 'Yes - Use ApplicationSet (Recommended)'
+            falseLabel: 'No - Use individual Applications'
+
+        includeComponents:
+          title: Include Common Components
+          type: array
+          description: 'Select common components to include'
+          uniqueItems: true
+          default: ['tracing']
+          items:
+            type: string
+            enum:
+              - tracing
+              - rollout-transform
+              - cloudsql-proxy
+          ui:widget: checkboxes
+
+  steps:
+    - id: generate-timestamp
+      name: Generate Timestamp
+      action: roadiehq:utils:jsonata
+      input:
+        data: {}
+        expression: '$now()'
+
+    - id: fetch-base
+      name: Fetch Application Base Template
+      action: fetch:template
+      input:
+        url: ./skeleton
+        targetPath: argocd-files
+        templateFileExtension: true
+        values:
+          appName: ${{ parameters.appName }}
+          description: ${{ parameters.description }}
+          team: ${{ parameters.team }}
+          alertChannel: ${{ parameters.alertChannel }}
+          environments: ${{ parameters.environments }}
+          includeComponents: ${{ parameters.includeComponents }}
+          useApplicationSet: ${{ parameters.useApplicationSet }}
+          createDraftPR: ${{ parameters.createDraftPR }}
+          language: ${{ parameters.language }}
+          createCircleCI: ${{ parameters.createCircleCI }}
+          createRepo: ${{ parameters.createRepo }}
+
+    - id: fetch-repo
+      name: Fetch Repository Template
+      if: ${{ parameters.createRepo }}
+      action: fetch:template
+      input:
+        url: ./skeleton-repo
+        templateFileExtension: true
+        targetPath: repo-content
+        values:
+          appName: ${{ parameters.appName }}
+          description: ${{ parameters.description }}
+          team: ${{ parameters.team }}
+          alertChannel: ${{ parameters.alertChannel }}
+          language: ${{ parameters.language }}
+          createCircleCI: ${{ parameters.createCircleCI }}
+
+    - id: fetch-circleci-for-repo
+      name: Include CircleCI in New Repository
+      if: ${{ parameters.createRepo and parameters.createCircleCI }}
+      action: fetch:template
+      input:
+        url: ./skeleton-circleci
+        templateFileExtension: true
+        targetPath: repo-content
+        values:
+          appName: ${{ parameters.appName }}
+          language: ${{ parameters.language }}
+
+    - id: publish-repo
+      name: Create Application Repository
+      if: ${{ parameters.createRepo }}
+      action: publish:github
+      input:
+        repoUrl: github.com?owner=sanity-io&repo=${{ parameters.appName }}&visibility=private
+        description: ${{ parameters.description }}
+        defaultBranch: main
+        topics:
+          [
+            '${{ parameters.team }}',
+            '${{ parameters.language }}',
+            'kubernetes',
+            'argocd',
+          ]
+        # Repository variables require Actions:Write permission on GitHub App
+        # Uncomment after adding permission and accepting at org level
+        # repoVariables:
+        #   TEAM: ${{ parameters.team }}
+        #   LANGUAGE: ${{ parameters.language }}
+        gitCommitMessage: 'Initial commit'
+        gitAuthorName: 'Backstage'
+        gitAuthorEmail: 'backstage@sanity.io'
+        sourcePath: repo-content
+        access: sanity-io/${{ parameters.team }}
+
+    - id: fetch-circleci
+      name: Fetch CircleCI Template for Existing Repository
+      if: ${{ parameters.createCircleCI and not parameters.createRepo }}
+      action: fetch:template
+      input:
+        url: ./skeleton-circleci
+        templateFileExtension: true
+        targetPath: circleci-config
+        values:
+          appName: ${{ parameters.appName }}
+          language: ${{ parameters.language }}
+
+    - id: publish-pr
+      name: Create Pull Request to ArgoCD Apps Repository
+      action: publish:github:pull-request
+      input:
+        repoUrl: github.com?owner=sanity-io&repo=argocd-apps
+        branchName: onboard-${{ parameters.appName }}-${{ steps['generate-timestamp'].output.result | replace(':', '') | replace('T', '-') | replace('Z', '') }}
+        title: 'Add ${{ parameters.appName }} application'
+        draft: ${{ parameters.createDraftPR }}
+        sourcePath: argocd-files
+        description: |
+          ## Add ${{ parameters.appName }} application
+
+          This PR adds the application structure for `${{ parameters.appName }}` to the argocd-apps repository.
+
+          **Application Details:**
+          - **Name:** ${{ parameters.appName }}
+          - **Team:** ${{ parameters.team }}
+          - **Description:** ${{ parameters.description }}
+          - **Alert Channel:** ${{ parameters.alertChannel }}
+
+          **Deployment Configuration:**
+          - **Uses ApplicationSet:** ${{ parameters.useApplicationSet }}
+          - **Environments:** ${{ parameters.environments | join(', ') }}
+          - **Components:** ${{ parameters.includeComponents | join(', ') }}
+
+          **Created Structure:**
+          ```
+          ${{ parameters.appName }}/
+          ├── base/
+          │   ├── kustomization.yaml
+          │   ├── deployment.yaml
+          │   ├── service.yaml
+          │   └── serviceaccount.yaml
+          └── environments/
+          {% for env in parameters.environments %}    ├── {{ env }}/
+              │   ├── kustomization.yaml
+              │   ├── ns.yaml
+              │   └── {{ parameters.appName }}.env
+          {% endfor %}
+          ```
+
+          {% if parameters.useApplicationSet %}**ApplicationSet** will be created to manage deployments across environments.
+          {% else %}**Individual Applications** will be created for each environment.{% endif %}
+
+          ## Next Steps
+          1. Merge this PR
+          2. Update image tags and environment variables as needed
+          3. Configure any additional resources (secrets, configmaps, etc.)
+          4. Deploy to staging first for testing
+
+          🤖 Generated with [Claude Code](https://claude.ai/code)
+
+    - id: publish-circleci-pr
+      name: Create CircleCI Configuration Pull Request
+      if: ${{ parameters.createCircleCI and not parameters.createRepo }}
+      action: publish:github:pull-request
+      input:
+        repoUrl: github.com?owner=sanity-io&repo=${{ parameters.appName }}
+        branchName: add-circleci-config-${{ steps['generate-timestamp'].output.result | replace(':', '') | replace('T', '-') | replace('Z', '') }}
+        title: 'Add CircleCI configuration'
+        draft: ${{ parameters.createDraftPR }}
+        sourcePath: circleci-config/.circleci
+        targetPath: .circleci
+        description: |
+          ## Add CircleCI Configuration to Existing Repository
+
+          This PR adds CircleCI configuration for the existing `${{ parameters.appName }}` repository.
+
+          **Configuration Details:**
+          - Language: ${{ parameters.language }}
+          - Includes build, test, and lint jobs
+          - Docker image build and push to GCR
+          - Slack notifications for failures
+
+          ## What's included:
+          - Build and test pipeline
+          - Docker image creation and push to `europe-docker.pkg.dev/sanity-artifacts/containers/${{ parameters.appName }}`
+          - Automatic tagging as `latest` for main branch
+
+          🤖 Generated with [Claude Code](https://claude.ai/code)
+
+  output:
+    links:
+      - title: Application Repository
+        icon: github
+        url: https://github.com/sanity-io/${{ parameters.appName }}
+      - title: View ArgoCD Apps PR
+        icon: github
+        url: ${{ steps['publish-pr'].output.remoteUrl }}
+      - title: View CircleCI Config PR
+        icon: github
+        url: ${{ steps['publish-circleci-pr'].output.remoteUrl }}
+        if: ${{ parameters.createCircleCI }}
+      - title: ArgoCD Apps Repository
+        icon: github
+        url: https://github.com/sanity-io/argocd-apps

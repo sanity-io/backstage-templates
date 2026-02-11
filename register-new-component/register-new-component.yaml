@@ -1,0 +1,308 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: register-new-component
+  title: Register your software with Backstage
+  description: 'Register a GitHub repository from the sanity-io organization in Backstage. Just provide the repository name and owner.'
+spec:
+  owner: group:sanity-io/sre
+  type: service
+
+  # These are the steps which are rendered in the frontend with the form input.
+  parameters:
+    - title: Repository Information
+      required:
+        - repoName
+        - owner
+        - type
+        - lifecycle
+      properties:
+        repoName:
+          title: Repository Name
+          type: string
+          description: 'Select a repository from the sanity-io organization or enter manually'
+          ui:field: RepoUrlPicker
+          ui:options:
+            allowedHosts:
+              - github.com
+            allowedOwners:
+              - sanity-io
+            allowManualEntry: true
+
+        name:
+          title: Component Name (optional)
+          type: string
+          description: Leave blank to use repository name
+
+        description:
+          title: Component Description (optional)
+          type: string
+          description: Leave blank to auto-generate
+
+        type:
+          title: Component Type
+          type: string
+          description: The type of component (service, website, library, etc.)
+          default: service
+          enum:
+            - service
+            - website
+            - library
+            - documentation
+            - tool
+            - other
+
+        lifecycle:
+          title: Lifecycle
+          type: string
+          description: The lifecycle stage of this component
+          default: production
+          enum:
+            - experimental
+            - production
+            - deprecated
+
+        owner:
+          title: Owner
+          type: string
+          description: Team or person responsible for this component
+          ui:field: OwnerPicker
+          ui:options:
+            catalogFilter:
+              kind: Group
+
+        system:
+          title: System
+          type: string
+          description: The system this component belongs to (optional)
+          ui:field: EntityPicker
+          ui:options:
+            catalogFilter:
+              kind: System
+            defaultKind: System
+
+        tags:
+          title: Tags
+          type: string
+          description: Comma-separated list of tags (e.g., backend, nodejs, api, internal)
+
+    - title: Integration Annotations
+      description: These fields are automatically populated based on your repository selection. Edit as needed.
+      properties:
+        argocdProjectName:
+          title: ArgoCD Project Name
+          type: string
+          ui:field: RepoBasedField
+          ui:options:
+            fieldType: argocd
+        kubernetesLabelSelector:
+          title: Kubernetes Label Selector
+          type: string
+          ui:field: RepoBasedField
+          ui:options:
+            fieldType: kubernetes
+        circleCIProjectSlug:
+          title: CircleCI Project Slug
+          type: string
+          ui:field: RepoBasedField
+          ui:options:
+            fieldType: circleci
+        githubProjectSlug:
+          title: GitHub Project Slug
+          type: string
+          ui:field: RepoBasedField
+          ui:options:
+            fieldType: github
+        grafanaDashboardSelector:
+          title: Grafana Dashboard Selector
+          type: string
+          description: Tag or query to select Grafana dashboards (e.g., "my-service" or "(tags @> 'foo') && (tags @> 'bar')")
+          ui:field: RepoBasedField
+          ui:options:
+            fieldType: grafana
+        sentryProjectSlug:
+          title: Sentry Project Slug
+          type: string
+          ui:field: RepoBasedField
+          ui:options:
+            fieldType: sentry
+        socketRepoSlug:
+          title: Socket.dev Repo Slug
+          type: string
+          ui:field: RepoBasedField
+          ui:options:
+            fieldType: socket
+        terraformWorkspaces:
+          title: Terraform Workspaces
+          type: string
+          description: Comma-separated list of workspaces (e.g., gcp-sanity-staging-svc,gcp-sanity-production-svc)
+        techDocsRef:
+          title: TechDocs Reference
+          type: string
+          description: Path to folder containing mkdocs.yml file (e.g., 'dir:.' if mkdocs.yml is in root, 'dir:./docs' if mkdocs.yml is in docs folder)
+
+    - title: External Links
+      properties:
+        links:
+          title: External Links
+          type: array
+          description: Links to external resources (docs, runbooks, etc.)
+          items:
+            type: object
+            properties:
+              url:
+                title: URL
+                type: string
+                description: The URL of the external resource
+              title:
+                title: Title
+                type: string
+                description: Display title for the link
+              icon:
+                title: Icon
+                type: string
+                description: Optional icon name (e.g., docs, dashboard, github)
+                enum:
+                  - docs
+                  - dashboard
+                  - github
+                  - cloud
+                  - help
+                  - web
+          ui:options:
+            addable: true
+            removable: true
+            orderable: true
+
+  # These are the steps that are executed in series in the scaffolder backend.
+  steps:
+    - id: parse-repo-values
+      name: Parse repository URL and set component values
+      action: roadiehq:utils:jsonata
+      input:
+        data:
+          repoName: ${{ parameters.repoName }}
+          paramName: ${{ parameters.name }}
+          paramDescription: ${{ parameters.description }}
+          tags: ${{ parameters.tags }}
+          links: ${{ parameters.links }}
+          # Annotation parameters
+          argocdProjectName: ${{ parameters.argocdProjectName }}
+          kubernetesLabelSelector: ${{ parameters.kubernetesLabelSelector }}
+          circleCIProjectSlug: ${{ parameters.circleCIProjectSlug }}
+          githubProjectSlug: ${{ parameters.githubProjectSlug }}
+          grafanaDashboardSelector: ${{ parameters.grafanaDashboardSelector }}
+          sentryProjectSlug: ${{ parameters.sentryProjectSlug }}
+          socketRepoSlug: ${{ parameters.socketRepoSlug }}
+          terraformWorkspaces: ${{ parameters.terraformWorkspaces }}
+          techDocsRef: ${{ parameters.techDocsRef }}
+        expression: |
+          (
+            $repoInput := $.repoName;
+            $org := "sanity-io";
+            /* RepoUrlPicker returns: github.com?owner=sanity-io&repo=repo-name
+               We need to extract just the repo name */
+            $repo := $contains($repoInput, "&repo=") ?
+                       /* Format: github.com?owner=sanity-io&repo=repo-name */
+                       $substringAfter($repoInput, "&repo=") :
+                     $contains($repoInput, "repo=") ?
+                       /* Format: github.com?repo=repo-name or ?repo=repo-name&owner=... */
+                       $split($substringAfter($repoInput, "repo="), "&")[0] :
+                     $contains($repoInput, "github.com/") ?
+                       /* URL format: github.com/sanity-io/repo-name */
+                       $split($repoInput, "/")[-1] :
+                     /* Just the repo name */
+                     $repoInput;
+            $cleanRepo := $trim($repo);
+            /* Process tags as array */
+            $tagsArray := $.tags ? $split($.tags, ",").$trim($) : [];
+            {
+              "gitHubOrg": $org,
+              "repoName": $cleanRepo,
+              "repoSlug": $org & "/" & $cleanRepo,
+              "componentName": $.paramName ? $.paramName : $cleanRepo,
+              "componentDescription": $.paramDescription ? $.paramDescription : ("Service automatically registered from " & $cleanRepo & " repository"),
+              "repoUrlForPR": "github.com?repo=" & $cleanRepo & "&owner=" & $org,
+              "branchName": "register-to-catalog-" & $replace($replace($replace($string($now()), ":", ""), "T", "-"), "Z", ""),
+              "tags": $tagsArray,
+              "links": $.links ? $.links : [],
+              "annotations": $merge([
+                {
+                  "argocd/project-name": $.argocdProjectName,
+                  "backstage.io/kubernetes-label-selector": $.kubernetesLabelSelector,
+                  "circleci.com/project-slug": $.circleCIProjectSlug,
+                  "github.com/project-slug": $.githubProjectSlug,
+                  "grafana/dashboard-selector": $.grafanaDashboardSelector,
+                  "sentry.io/project-slug": $.sentryProjectSlug,
+                  "socket.dev/repo-slug": $.socketRepoSlug
+                }[$ != null],
+                $.terraformWorkspaces ? {
+                  "terraform/organization": $org,
+                  "terraform/workspaces": $.terraformWorkspaces
+                } : {},
+                $.techDocsRef ? {"backstage.io/techdocs-ref": $.techDocsRef} : {}
+              ])
+            }
+          )
+
+    - id: log-parsed-values
+      name: Review - Component configuration
+      action: debug:log
+      input:
+        message: |
+          Component will be registered with:
+
+          Basic Info:
+          - Name: ${{ steps['parse-repo-values'].output.result.componentName }}
+          - Description: ${{ steps['parse-repo-values'].output.result.componentDescription }}
+          - Repository: ${{ steps['parse-repo-values'].output.result.repoSlug }}
+          - Owner: ${{ parameters.owner }}
+          - Tags: ${{ steps['parse-repo-values'].output.result.tags }}
+
+          Annotations (actual values that will be used):
+          ${{ steps['parse-repo-values'].output.result.annotations }}
+
+    - id: fetchCatalogTemplate
+      name: Fetch the catalog-info.yaml file.
+      action: fetch:template
+      input:
+        url: ./skeleton
+        templateFileExtension: .njk
+        values:
+          name: ${{ steps['parse-repo-values'].output.result.componentName }}
+          description: ${{ steps['parse-repo-values'].output.result.componentDescription }}
+          owner: ${{ parameters.owner }}
+          entityTags: ${{ steps['parse-repo-values'].output.result.tags }}
+          entityLinks: ${{ steps['parse-repo-values'].output.result.links }}
+          type: ${{ parameters.type }}
+          repoSlug: ${{ steps['parse-repo-values'].output.result.repoSlug }}
+          lifecycle: ${{ parameters.lifecycle }}
+          system: ${{ parameters.system }}
+          annotations: ${{ steps['parse-repo-values'].output.result.annotations }}
+
+    - id: createPullRequest
+      name: Create Pull Request.
+      action: publish:github:pull-request
+      input:
+        repoUrl: ${{ steps['parse-repo-values'].output.result.repoUrlForPR }}
+        branchName: ${{ steps['parse-repo-values'].output.result.branchName }}
+        title: 'chore(backstage): register ${{ steps["parse-repo-values"].output.result.repoName }} component to catalog'
+        description: This PR adds a metadata file about this catalog entity so that it can be registered in our software catalog, with optional integrations and TechDocs.
+
+    - id: register
+      name: Register location in catalog (will show up after PR is merged)
+      action: catalog:register
+      continueOnFailure: true
+      input:
+        catalogInfoUrl: https://github.com/${{ steps['parse-repo-values'].output.result.repoSlug }}/blob/main/catalog-info.yaml
+        optional: true
+
+  # These are the outputs from the backend steps, and can be displayed in the frontend after completion.
+  output:
+    links:
+      - title: View the pull request on GitHub
+        icon: github
+        url: ${{ steps['createPullRequest'].output.remoteUrl }}
+      - title: Location registered (will appear after PR merge)
+        icon: catalog
+        url: ${{ steps['register'].output.body.location.target if steps['register'].output.body.location else 'Location registration in progress' }}

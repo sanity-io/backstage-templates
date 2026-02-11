@@ -1,0 +1,12 @@
+apiVersion: backstage.io/v1alpha1
+kind: Location
+metadata:
+  name: sanity-templates
+  description: Sanity's Backstage scaffolder templates
+  annotations:
+    github.com/project-slug: sanity-io/backstage-templates
+spec:
+  targets:
+    - ./register-new-component/register-new-component.yaml
+    - ./update-existing-component/update-catalog-entry.yaml
+    - ./onboard-app-to-argocd/onboard-new-application.yaml
